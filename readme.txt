@@ -5,3 +5,4 @@ mvn archetype:generate -DarchetypeGroupId=com.vaadin -DarchetypeArtifactId=vaadi
 -DgroupId=mycompany -DartifactId=foto-map -Dversion=1.0 -Dpackaging=war
 cd foto-map
 mvn install > log.txt
+mvn jetty:run
