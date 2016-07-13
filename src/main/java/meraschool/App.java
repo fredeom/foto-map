@@ -13,9 +13,10 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package mycompany;
+package meraschool;
 
 import com.vaadin.Application;
+import com.vaadin.event.ShortcutAction.KeyCode;
 import com.vaadin.ui.Button;
 import com.vaadin.ui.Button.ClickEvent;
 import com.vaadin.ui.Label;
@@ -25,7 +26,7 @@ import com.vaadin.ui.Window;
  * The Application's "main" class
  */
 @SuppressWarnings("serial")
-public class MyVaadinApplication extends Application
+public class App extends Application
 {
     private Window window;
 
@@ -35,13 +36,18 @@ public class MyVaadinApplication extends Application
         window = new Window("My Vaadin Application");
         setMainWindow(window);
         Button button = new Button("Click Me");
+        button.setClickShortcut(KeyCode.SPACEBAR);
         button.addListener(new Button.ClickListener() {
             public void buttonClick(ClickEvent event) {
                 window.addComponent(new Label("Thank you for clicking"));
+
+                Window w = new Window("Floating window");
+                w.setModal(true);
+                window.addWindow(w);
+                w.setCloseShortcut(KeyCode.ESCAPE, null);
+                w.focus();
             }
         });
         window.addComponent(button);
-        
     }
-    
 }
