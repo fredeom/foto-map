@@ -29,25 +29,28 @@ import com.vaadin.ui.Window;
 public class App extends Application
 {
     private Window window;
+    private Controller controller;
 
     @Override
     public void init()
     {
+        controller = new Controller(this);
         window = new Window("My Vaadin Application");
         setMainWindow(window);
         Button button = new Button("Click Me");
-        button.setClickShortcut(KeyCode.SPACEBAR);
         button.addListener(new Button.ClickListener() {
             public void buttonClick(ClickEvent event) {
                 window.addComponent(new Label("Thank you for clicking"));
 
-                Window w = new Window("Floating window");
+                Window w = new ViewWindow(controller);
                 w.setModal(true);
+                w.setSizeFull();
                 window.addWindow(w);
                 w.setCloseShortcut(KeyCode.ESCAPE, null);
                 w.focus();
             }
         });
+        button.setClickShortcut(KeyCode.SPACEBAR);
         window.addComponent(button);
     }
 }
