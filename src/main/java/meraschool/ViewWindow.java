@@ -1,9 +1,12 @@
 package meraschool;
 
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.OutputStream;
 
-import javax.sound.midi.MidiMessage;
-import javax.sound.midi.Receiver;
+import org.vaadin.peter.contextmenu.ContextMenu;
+import org.vaadin.peter.contextmenu.ContextMenu.ContextMenuItem;
 
 import com.vaadin.event.MouseEvents.ClickEvent;
 import com.vaadin.event.MouseEvents.ClickListener;
@@ -29,38 +32,59 @@ public class ViewWindow extends Window {
 		this.controller = controller;
 		createAndShowGUI();
 	}
+
 	private void createAndShowGUI() {
 		btnLeft = new Button("<");
+
+		final ContextMenu cm = new ContextMenu();
+		ContextMenuItem one = cm.addItem("One");;
+		ContextMenuItem two = cm.addItem("Two");
+		one.setEnabled(true);
+		two.setVisible(true);
+		controller.getApplication().getMainWindow().addComponent(cm);
+		//this.addComponent(cm);
+
+		btnLeft.setSizeUndefined();
 		btnRight = new Button(">");
-		HorizontalLayout hl = new HorizontalLayout();
-		hl.addComponent(btnLeft);
-		hl.setComponentAlignment(btnLeft, Alignment.MIDDLE_CENTER);
+		btnRight.setSizeUndefined();
 		image = new Embedded("", new ClassResource("/1.jpg", controller.getApplication()));
+		image.setDebugId("imageDebugId");
 		image.setSizeUndefined();
 		image.addListener(new ClickListener() {
             public void click(ClickEvent event) {
                 System.out.println("Click on image " + event.getRelativeX() + " " + event.getRelativeY() + " " + event.getButton());
+                cm.show(image);
 
                 // TODO: add window with upload button
-                Upload upload = new Upload(null, null);
-                upload.setImmediate(true);
-                upload.setButtonCaption("Upload me");
-                upload.setReceiver(new MyReceiver());
-                upload.setVisible(true);
-
-                addComponent(upload);
+//                Upload upload = new Upload(null, null);
+//                upload.setImmediate(true);
+//                upload.setButtonCaption("Upload me");
+//                upload.setReceiver(new MyReceiver());
+//                upload.setVisible(true);
+//
+//                addComponent(upload);
             }
         });
+        HorizontalLayout hl = new HorizontalLayout();
+        hl.addComponent(btnLeft);
+        hl.setComponentAlignment(btnLeft, Alignment.MIDDLE_CENTER);
 		hl.addComponent(image);
 		hl.setComponentAlignment(image, Alignment.BOTTOM_CENTER);
 		hl.addComponent(btnRight);
 		hl.setComponentAlignment(btnRight, Alignment.MIDDLE_CENTER);
 		hl.setSizeUndefined();
-		addComponent(hl);
+		setContent(hl);
+		setSizeUndefined();
 	}
 
 	public static class MyReceiver implements com.vaadin.ui.Upload.Receiver {
         public OutputStream receiveUpload(String filename, String mimeType) {
+            OutputStream os = null;
+            try {
+                os = new FileOutputStream(new File(filename));
+            } catch (FileNotFoundException e) {
+                e.printStackTrace();
+            }
             return System.out;
         }
 	}
