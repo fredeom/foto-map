@@ -6,3 +6,6 @@ mvn archetype:generate -DarchetypeGroupId=com.vaadin -DarchetypeArtifactId=vaadi
 cd foto-map
 mvn install > log.txt
 mvn jetty:run
+
+after adding of plugin:
+mvn eclipse:eclipse

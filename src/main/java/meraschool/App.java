@@ -44,7 +44,6 @@ public class App extends Application
 
                 Window w = new ViewWindow(controller);
                 w.setModal(true);
-                w.setSizeFull();
                 window.addWindow(w);
                 w.setCloseShortcut(KeyCode.ESCAPE, null);
                 w.focus();
