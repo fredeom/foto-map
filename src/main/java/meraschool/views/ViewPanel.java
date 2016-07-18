@@ -13,15 +13,20 @@ import com.vaadin.ui.Panel;
 import meraschool.controllers.ViewController;
 
 @SuppressWarnings("serial")
-public class ViewPanel extends Panel {
+public class ViewPanel extends Panel implements ViewModelListener {
+
+    private ViewController c;
+    private Embedded image;
 
     public ViewPanel(ViewController controller) {
+        this.c = controller;
+        c.viewModel.addListener(this);
         Button btnLeft = new Button("<");
         btnLeft.addShortcutListener(new MyDebugListener1("<<arrow=left<<", KeyCode.ARROW_LEFT, null));
         btnLeft.setSizeUndefined();
         Button btnRight = new Button(">");
         btnRight.setSizeUndefined();
-        Embedded image = new Embedded(null, controller.getImage());
+        image = new Embedded(null, c.getImage());
         image.setDebugId("imageDebugId" + this.hashCode());
         image.setSizeUndefined();
         image.addListener(controller.getImageClickListener());
@@ -35,9 +40,16 @@ public class ViewPanel extends Panel {
         hl.setSizeUndefined();
         setContent(hl);
         setSizeUndefined();
+        viewChanged();
     }
 
-    public void reloadView() {
+    public void viewChanged() {
+        image.setSource(c.getImage());
+        // c.app.dbConnector.setImage(image, c.viewModel.getViewId());
+        image.setWidth("600px");
+        image.setHeight("400px");
+
+        // add moar Links with click listeners ?
     }
 }
 

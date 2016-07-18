@@ -6,6 +6,7 @@ import com.vaadin.event.MouseEvents.ClickEvent;
 import com.vaadin.event.MouseEvents.ClickListener;
 import com.vaadin.event.ShortcutAction.KeyCode;
 import com.vaadin.terminal.ClassResource;
+import com.vaadin.terminal.FileResource;
 import com.vaadin.terminal.Resource;
 import com.vaadin.ui.Window;
 
@@ -17,9 +18,9 @@ import meraschool.views.PreviewWindow;
 
 public class ViewController {
 
-    private App app;
-    protected ViewModel model;
-    protected Window window;
+    public App app;
+    public ViewModel viewModel;
+    protected Window window; // ???
 
     public ViewController(App app) {
         this(app, new ViewModel());
@@ -27,21 +28,23 @@ public class ViewController {
 
     public ViewController(App app, ViewModel model) {
         this.app = app;
-        this.model = model;
+        this.viewModel = model;
     }
 
     public void setWindow(Window window) {
         this.window = window;
     }
 
-    public Resource getImage() {
-        if (model.getViewId() == null) {
+    public Resource getImage() { // move entrails to DbConnectorImp ?
+                                 // Cant move embedded without initialization
+                                 // with Application
+        if (viewModel.getViewId() == 0) {
             return new ClassResource("/1.jpg", app);
         } else {
             // get image and draw location links using AlphaComposite ac;
+            return new FileResource(app.dbConnector.getImagePathByViewId(viewModel.getViewId()).toFile(), app);
             // return new FileResource(new File(dbInstance.getBaseDir() + " " +
-            // dbInstance.getImageByViewId(model.getViewId())), app);
-            return null;
+            // dbInstance.getImageByViewId(viewModel.getViewId())), app);
         }
     }
 
@@ -52,7 +55,7 @@ public class ViewController {
     // public void saveView() {
     // }
 
-    public void loadView(String viewId) {
+    public void loadView(int viewId) {
 
     }
 
@@ -60,14 +63,15 @@ public class ViewController {
     public ClickListener getImageClickListener() {
         return new ClickListener() {
             public void click(ClickEvent event) {
-                if (model.getViewId() == null) {
+                if (viewModel.getViewId() == 0) {
                     int viewLevel = getThis() instanceof PreviewController ? ((PreviewController) getThis()).viewLevel
                             : 0;
-                    final PreviewController c = new PreviewController(app, viewLevel + 1, new LocationModel(),
+                    final PreviewController c = new PreviewController(app, viewLevel + 1,
+                            new LocationModel(null, app.dbConnector.getLocationList()),
                             new ViewModel());
                     c.setStrangeHandler(new Callable<Void>() {
                         public Void call() throws Exception {
-                            loadView(c.model.getViewId());
+                            loadView(c.viewModel.getViewId());
                             ((Window) c.window.getParent()).removeWindow(c.window);
                             window.focus();
                             return null;

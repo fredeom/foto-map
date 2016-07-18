@@ -1,36 +1,40 @@
 package meraschool.models;
 
+import java.util.ArrayList;
 import java.util.List;
 
-public class ViewModel {
-    private LinkModel currentEditableLink; // TODO: mirror cPrntLnkHndlr func?
-    private String viewId;
-    private List<LinkModel> links;
+import meraschool.views.ViewModelListener;
 
-    public ViewModel(LinkModel currentEditableLink, String viewId,
-            List<LinkModel> links) {
-        this.currentEditableLink = currentEditableLink;
+public class ViewModel {
+    public int viewId;
+    private List<ViewModelListener> listeners = new ArrayList<ViewModelListener>();
+
+    public ViewModel(int viewId) {
         this.viewId = viewId;
-        this.links = links;
     }
 
     public ViewModel() {
-        this(null, null, null);
+        this(0);
     }
 
-    public String getViewId() {
+    public int getViewId() {
         return viewId;
     }
 
-    public void setViewId(String viewId) {
+    public void addListener(ViewModelListener listener) {
+        listeners.add(listener);
+    }
+
+    public void selectViewId(int viewId) {
         this.viewId = viewId;
+        fireViewChanged();
     }
 
-    public List<LinkModel> getLinks() {
-        return links;
+    public void fireViewChanged() {
+        for (ViewModelListener l : listeners) {
+            l.viewChanged();
+        }
     }
 
-    public void setLinks(List<LinkModel> links) {
-        this.links = links;
-    }
+    // Bring interfaces home!!! (ViewModelListener)
 }

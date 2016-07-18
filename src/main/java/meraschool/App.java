@@ -4,11 +4,13 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import com.vaadin.Application;
+import com.vaadin.event.FieldEvents;
 import com.vaadin.event.ShortcutAction.KeyCode;
 import com.vaadin.service.ApplicationContext.TransactionListener;
 import com.vaadin.ui.Button;
 import com.vaadin.ui.Button.ClickEvent;
 import com.vaadin.ui.Label;
+import com.vaadin.ui.TextField;
 import com.vaadin.ui.Window;
 
 import meraschool.views.ViewWindow;
@@ -16,7 +18,8 @@ import meraschool.views.ViewWindow;
 @SuppressWarnings("serial")
 public class App extends Application
 {
-    public String dbname;
+    public DbConnector dbConnector;
+    public TextField dbNameTextField;
 
     @Override
     public void init()
@@ -30,7 +33,10 @@ public class App extends Application
         Button exitButton = new Button("Restart");
         exitButton.addListener(new ClickListener2(this));
         exitButton.setClickShortcut(KeyCode.ESCAPE);
+        dbNameTextField = new TextField("Db name: ");
+        dbNameTextField.addListener(new TextChangeListener1(this));
         getMainWindow().addComponent(exitButton);
+        getMainWindow().addComponent(dbNameTextField);
 
         getContext().addTransactionListener(new MyTransactionListener(this));
     }
@@ -68,6 +74,26 @@ class ClickListener2 implements Button.ClickListener {
 }
 
 @SuppressWarnings("serial")
+class TextChangeListener1 implements FieldEvents.TextChangeListener {
+    App app;
+
+    public TextChangeListener1(App app) {
+        this.app = app;
+    }
+
+    public void textChange(FieldEvents.TextChangeEvent event) {
+        String db = event.getText().replaceAll("^/+", "");
+        db = db.replaceAll("^/+", "");
+        db = db.replaceAll("/+$", "");
+        if (db.isEmpty()) {
+            db = "db";
+        }
+        app.dbNameTextField.setValue(db);
+        this.app.dbConnector = new DbConnectorImpl(db);
+    }
+}
+
+@SuppressWarnings("serial")
 class MyTransactionListener implements TransactionListener {
     App app;
 
@@ -78,9 +104,15 @@ class MyTransactionListener implements TransactionListener {
         Matcher m = Pattern.compile("\\(GET /(.*)\\).*").matcher(transactionData.toString());
         if (m.find()) {
             String db = m.group(1).isEmpty() ? "db" : m.group(1);
-            db = db.replaceAll("/$", "");
-            System.out.println("data base name: " + db);
-            app.dbname = db;
+
+            db = db.replaceAll("^/+", "");
+            db = db.replaceAll("/+$", "");
+            if (db.isEmpty()) {
+                db = "db";
+            }
+            app.dbNameTextField.setValue(db);
+            this.app.dbConnector = new DbConnectorImpl(db);
+
             app.getContext().removeTransactionListener(this);
         }
     }
