@@ -36,16 +36,15 @@ public class DbConnectorImpl implements DbConnector {
 
             if (location.id == 0) {
                 location.id = getMaxId(LOCATIONS, "id") + 1;
-                ISqlJetTable locTable = db.getTable(LOCATIONS);
-                locTable.insert(location.id, location.name);
+                db.getTable(LOCATIONS).insert(location.id, location.name);
             }
 
             int viewId = getMaxId(VIEWS, "id") + 1;
             ISqlJetTable viewTable = db.getTable(VIEWS);
 
-            String filename = image.getFileName().toString();
-            filename = filename.substring(filename.indexOf("."));
-            String imageName = String.valueOf(viewId) + filename;
+            String ext = image.getFileName().toString();
+            ext = ext.substring(ext.indexOf("."));
+            String imageName = String.valueOf(viewId) + ext;
             Files.move(image, Paths.get(getImageDirectory(), imageName), StandardCopyOption.REPLACE_EXISTING);
             viewTable.insert(viewId, location.id, viewIdAfter, imageName);
             closeConnection();
@@ -63,7 +62,9 @@ public class DbConnectorImpl implements DbConnector {
             ISqlJetCursor cursor = db.getTable(LOCATIONS).open();
             List<Location> list = new ArrayList<Location>();
             do {
-                list.add(new Location((int) cursor.getInteger("id"), cursor.getString("name")));
+                if (!cursor.eof()) {
+                    list.add(new Location((int) cursor.getInteger("id"), cursor.getString("name")));
+                }
             } while (cursor.next());
             closeConnection();
             return list;
@@ -79,15 +80,15 @@ public class DbConnectorImpl implements DbConnector {
             prepareConnection(false);
             ISqlJetCursor cursor = db.getTable(VIEWS).open();
             do {
-                if (cursor.getInteger("id") == viewId) {
-                    loc = new Location((int) cursor.getInteger("locid"), ""/**/);
+                if (!cursor.eof() && cursor.getInteger("id") == viewId) {
+                    loc = new Location((int) cursor.getInteger("locid"), "");
                     break;
                 }
             } while (cursor.next());
             if (loc.id != 0) {
                 cursor = db.getTable(LOCATIONS).open();
                 do {
-                    if (cursor.getInteger("id") == loc.id) {
+                    if (!cursor.eof() && cursor.getInteger("id") == loc.id) {
                         loc.name = cursor.getString("name");
                         break;
                     }
@@ -107,7 +108,7 @@ public class DbConnectorImpl implements DbConnector {
             ISqlJetCursor cursor = db.getTable(VIEWS).open();
             int viewId = 0;
             do {
-                if (cursor.getInteger("locid") == location.id) {
+                if (!cursor.eof() && cursor.getInteger("locid") == location.id) {
                     if (cursor.getInteger("afterid") == 0) {
                         viewId = (int) cursor.getInteger("id");
                         break;
@@ -128,7 +129,7 @@ public class DbConnectorImpl implements DbConnector {
             ISqlJetCursor cursor = db.getTable(VIEWS).open();
             Path image = null;
             do {
-                if (cursor.getInteger("id") == viewId) {
+                if (!cursor.eof() && cursor.getInteger("id") == viewId) {
                     image = Paths.get(getImageDirectory(), cursor.getString("image"));
                     break;
                 }
@@ -146,14 +147,14 @@ public class DbConnectorImpl implements DbConnector {
             prepareConnection(true);
             ISqlJetCursor cursor = db.getTable(LOCATIONS).open();
             do {
-                if (cursor.getInteger("id") == location.id) {
+                if (!cursor.eof() && cursor.getInteger("id") == location.id) {
                     cursor.delete();
                 }
             } while (cursor.next());
             cursor = db.getTable(VIEWS).open();
             List<Integer> viewIds = new ArrayList<Integer>();
             do {
-                if (cursor.getInteger("locid") == location.id) {
+                if (!cursor.eof() && cursor.getInteger("locid") == location.id) {
                     Files.deleteIfExists(Paths.get(getImageDirectory(), cursor.getString("image")));
                     viewIds.add((int) cursor.getInteger("id"));
                     cursor.delete();
@@ -289,7 +290,11 @@ public class DbConnectorImpl implements DbConnector {
     }
 
     private String getImageDirectory() {
-        String dir = dbFilePath.substring(0, dbFilePath.lastIndexOf("/")) + "/images";
+        String dir = "images";
+        int ind = dbFilePath.lastIndexOf("/");
+        if (ind > 0) {
+            dir = dbFilePath.substring(0, ind + 1) + dir;
+        }
         Path dirPath = Paths.get(dir);
         if (!dirPath.toFile().exists()) {
             try {

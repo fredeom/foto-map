@@ -43,8 +43,6 @@ public class ViewController {
         } else {
             // get image and draw location links using AlphaComposite ac;
             return new FileResource(app.dbConnector.getImagePathByViewId(viewModel.getViewId()).toFile(), app);
-            // return new FileResource(new File(dbInstance.getBaseDir() + " " +
-            // dbInstance.getImageByViewId(viewModel.getViewId())), app);
         }
     }
 

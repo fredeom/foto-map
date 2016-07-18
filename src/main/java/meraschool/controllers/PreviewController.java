@@ -116,7 +116,8 @@ public class PreviewController extends ViewController {
             viewModel.selectViewId(app.dbConnector.getFirstViewByLocation(locationModel.selectedLocation));
         }
 
-        public void locationListChanged() { // ???
+        public void locationListChanged() {
+            System.out.println("here comes useless program branch");
         }
     }
 }
