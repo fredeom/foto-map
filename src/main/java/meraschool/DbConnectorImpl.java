@@ -1,5 +1,8 @@
 package meraschool;
 
+import java.awt.Graphics2D;
+import java.awt.Image;
+import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -7,14 +10,18 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
+
+import javax.imageio.ImageIO;
 
 import org.tmatesoft.sqljet.core.SqlJetException;
 import org.tmatesoft.sqljet.core.SqlJetTransactionMode;
 import org.tmatesoft.sqljet.core.table.ISqlJetCursor;
-import org.tmatesoft.sqljet.core.table.ISqlJetTable;
 import org.tmatesoft.sqljet.core.table.SqlJetDb;
 
+import meraschool.models.LinkModel;
 import meraschool.models.Location;
 
 public class DbConnectorImpl implements DbConnector {
@@ -22,6 +29,16 @@ public class DbConnectorImpl implements DbConnector {
     private static final String LOCATIONS = "locations";
     private static final String VIEWS = "views";
     private static final String LINKS = "links";
+
+    private static final String ID = "id";
+    private static final String LOCID = "locid";
+    private static final String ORDINAL = "ordr";
+    private static final String IMAGE = "image";
+    private static final String NAME = "name";
+    private static final String VIEWID = "viewid";
+    private static final String X = "x";
+    private static final String Y = "y";
+    private static final String VIEWREFID = "viewrefid";
 
     String dbFilePath;
     SqlJetDb db;
@@ -34,25 +51,85 @@ public class DbConnectorImpl implements DbConnector {
         try {
             prepareConnection(true);
 
-            if (location.id == 0) {
-                location.id = getMaxId(LOCATIONS, "id") + 1;
-                db.getTable(LOCATIONS).insert(location.id, location.name);
+            if (viewIdAfter > 0) {
+                ISqlJetCursor vc = db.getTable(VIEWS).open();
+                do {
+                    if (!vc.eof() && vc.getInteger(ID) == viewIdAfter) {
+                        location.id = (int) vc.getInteger(LOCID);
+                        break;
+                    }
+                } while (vc.next());
+            } else {
+                if (location.id == 0) {
+                    location.id = getMaxId(LOCATIONS) + 1;
+                    db.getTable(LOCATIONS).insert(location.id, location.name);
+                }
             }
 
-            int viewId = getMaxId(VIEWS, "id") + 1;
-            ISqlJetTable viewTable = db.getTable(VIEWS);
+            int viewId = getMaxId(VIEWS) + 1;
 
             String ext = image.getFileName().toString();
             ext = ext.substring(ext.indexOf("."));
             String imageName = String.valueOf(viewId) + ext;
-            Files.move(image, Paths.get(getImageDirectory(), imageName), StandardCopyOption.REPLACE_EXISTING);
-            viewTable.insert(viewId, location.id, viewIdAfter, imageName);
+            final Path imagePath = Paths.get(getImageDirectory(), imageName);
+            Files.move(image, imagePath, StandardCopyOption.REPLACE_EXISTING);
+
+            ISqlJetCursor cursor = db.getTable(VIEWS).open();
+            int ordinal = 1;
+            do {
+                if (!cursor.eof() && cursor.getInteger(ID) == viewIdAfter) {
+                    ordinal = (int) cursor.getInteger(ORDINAL) + 1;
+                    break;
+                }
+            } while (cursor.next());
+            cursor = db.getTable(VIEWS).open();
+            do {
+                if (!cursor.eof() && cursor.getInteger(LOCID) == location.id && cursor.getInteger(ORDINAL) >= ordinal) {
+                    cursor.update(cursor.getInteger(ID), cursor.getInteger(LOCID), cursor.getInteger(ORDINAL) + 1,
+                            cursor.getString(IMAGE));
+                }
+            } while (cursor.next());
+
+            db.getTable(VIEWS).insert(viewId, location.id, ordinal, imageName);
             closeConnection();
+
+            new ImageCompressor(imagePath).join();
 
             return viewId;
         } catch (Exception e) {
             e.printStackTrace();
             return 0;
+        }
+    }
+
+    public int addLink(int viewId, double x, double y, int refViewId) {
+        try {
+            prepareConnection(true);
+            int id = getMaxId(LINKS) + 1;
+            db.getTable(LINKS).insert(id, viewId, x, y, refViewId);
+            closeConnection();
+            return id;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return 0;
+        }
+    }
+
+    public void editLink(LinkModel lm) {
+        try {
+            prepareConnection(true);
+            ISqlJetCursor cursor = db.getTable(LINKS).open();
+            do {
+                if (!cursor.eof()) {
+                    if ((int) cursor.getInteger(ID) == lm.getId()) {
+                        cursor.update(cursor.getInteger(ID), cursor.getInteger(VIEWID), cursor.getFloat(X),
+                                cursor.getFloat(Y), lm.viewRefId);
+                    }
+                }
+            } while (cursor.next());
+            closeConnection();
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 
@@ -63,7 +140,7 @@ public class DbConnectorImpl implements DbConnector {
             List<Location> list = new ArrayList<Location>();
             do {
                 if (!cursor.eof()) {
-                    list.add(new Location((int) cursor.getInteger("id"), cursor.getString("name")));
+                    list.add(new Location((int) cursor.getInteger(ID), cursor.getString(NAME)));
                 }
             } while (cursor.next());
             closeConnection();
@@ -75,21 +152,21 @@ public class DbConnectorImpl implements DbConnector {
     }
 
     public Location getLocationByViewId(int viewId) {
-        Location loc = new Location(0, "tmpName");
+        Location loc = null;
         try {
             prepareConnection(false);
             ISqlJetCursor cursor = db.getTable(VIEWS).open();
             do {
-                if (!cursor.eof() && cursor.getInteger("id") == viewId) {
-                    loc = new Location((int) cursor.getInteger("locid"), "");
+                if (!cursor.eof() && cursor.getInteger(ID) == viewId) {
+                    loc = new Location((int) cursor.getInteger(LOCID), "");
                     break;
                 }
             } while (cursor.next());
-            if (loc.id != 0) {
+            if (loc != null && loc.id != 0) {
                 cursor = db.getTable(LOCATIONS).open();
                 do {
-                    if (!cursor.eof() && cursor.getInteger("id") == loc.id) {
-                        loc.name = cursor.getString("name");
+                    if (!cursor.eof() && cursor.getInteger(ID) == loc.id) {
+                        loc.name = cursor.getString(NAME);
                         break;
                     }
                 } while (cursor.next());
@@ -106,17 +183,86 @@ public class DbConnectorImpl implements DbConnector {
         try {
             prepareConnection(false);
             ISqlJetCursor cursor = db.getTable(VIEWS).open();
+
             int viewId = 0;
             do {
-                if (!cursor.eof() && cursor.getInteger("locid") == location.id) {
-                    if (cursor.getInteger("afterid") == 0) {
-                        viewId = (int) cursor.getInteger("id");
+                if (!cursor.eof() && cursor.getInteger(LOCID) == location.id) {
+                    if (cursor.getInteger(ORDINAL) == 1) {
+                        viewId = (int) cursor.getInteger(ID);
                         break;
                     }
+                    System.out.println(cursor.getInteger(ID) + " " + cursor.getInteger(LOCID) + " "
+                            + cursor.getInteger(ORDINAL) + " " + cursor.getString(IMAGE));
                 }
             } while (cursor.next());
             closeConnection();
             return viewId;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return 0;
+        }
+    }
+
+    public enum Neighbor {
+        LEFT, RIGHT
+    }
+
+    class ViewNode {
+        public int viewId;
+        public int ordinal;
+
+        public ViewNode(int viewId, int ordinal) {
+            this.viewId = viewId;
+            this.ordinal = ordinal;
+        }
+    }
+
+    public int getNeighborViewTo(int viewId, Neighbor n) {
+        try {
+            prepareConnection(false);
+
+            ISqlJetCursor cursor = db.getTable(VIEWS).open();
+            int locId = 0;
+            ViewNode vn = null;
+            do {
+                if (!cursor.eof()) {
+                    if (cursor.getInteger(ID) == viewId) {
+                        locId = (int) cursor.getInteger(LOCID);
+                        vn = new ViewNode(viewId, (int) cursor.getInteger(ORDINAL));
+                        break;
+                    }
+                }
+            } while (cursor.next());
+            if (locId == 0) {
+                return 0;
+            }
+            cursor = db.getTable(VIEWS).open();
+            List<ViewNode> vnl = new ArrayList<ViewNode>();
+            do {
+                if (!cursor.eof()) {
+                    if (cursor.getInteger(LOCID) == locId) {
+                        vnl.add(new ViewNode((int) cursor.getInteger(ID), (int) cursor.getInteger(ORDINAL)));
+                    }
+                }
+            } while (cursor.next());
+
+            Collections.sort(vnl, new Comparator<ViewNode>() {
+                public int compare(ViewNode vn1, ViewNode vn2) {
+                    return vn1.ordinal > vn2.ordinal ? 1 : 0;
+                }
+            });
+
+            int i;
+            for (i = 0; i < vnl.size(); ++i) {
+                if (vnl.get(i) == vn) {
+                    break;
+                }
+            }
+
+            closeConnection();
+
+            return n == Neighbor.LEFT ? vnl.get((i - 1 + vnl.size()) % vnl.size()).viewId
+                    : vnl.get((i + 1) % vnl.size()).viewId;
         } catch (Exception e) {
             e.printStackTrace();
             return 0;
@@ -129,8 +275,8 @@ public class DbConnectorImpl implements DbConnector {
             ISqlJetCursor cursor = db.getTable(VIEWS).open();
             Path image = null;
             do {
-                if (!cursor.eof() && cursor.getInteger("id") == viewId) {
-                    image = Paths.get(getImageDirectory(), cursor.getString("image"));
+                if (!cursor.eof() && cursor.getInteger(ID) == viewId) {
+                    image = Paths.get(getImageDirectory(), cursor.getString(IMAGE));
                     break;
                 }
             } while (cursor.next());
@@ -142,28 +288,77 @@ public class DbConnectorImpl implements DbConnector {
         }
     }
 
+    public LinkModel getLinkById(int linkId) {
+        LinkModel lm = null;
+        if (linkId != 0) {
+            try {
+                prepareConnection(false);
+                ISqlJetCursor cursor = db.getTable(LINKS).open();
+                do {
+                    if (!cursor.eof()) {
+                        if ((int) cursor.getInteger(ID) == linkId) {
+                            lm = new LinkModel(linkId, (int) cursor.getInteger(VIEWID), cursor.getFloat(X),
+                                    cursor.getFloat(Y), (int) cursor.getInteger(VIEWREFID));
+                        }
+                    }
+                } while (cursor.next());
+                closeConnection();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+        return lm;
+    }
+
+    public List<LinkModel> getLinksByViewId(int viewId) {
+        if (viewId == 0) {
+            return null;
+        }
+        try {
+            prepareConnection(false);
+            ISqlJetCursor cursor = db.getTable(LINKS).open();
+            List<LinkModel> links = null;
+            do {
+                if (!cursor.eof()) {
+                    if ((int) cursor.getInteger(VIEWID) == viewId) {
+                        if (links == null) {
+                            links = new ArrayList<LinkModel>();
+                        }
+                        links.add(new LinkModel((int) cursor.getInteger(ID), (int) cursor.getInteger(VIEWID),
+                                cursor.getFloat(X), cursor.getFloat(Y), (int) cursor.getInteger(VIEWREFID)));
+                    }
+                }
+            } while (cursor.next());
+            closeConnection();
+            return links;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
     public void removeLocation(Location location) {
         try {
             prepareConnection(true);
             ISqlJetCursor cursor = db.getTable(LOCATIONS).open();
             do {
-                if (!cursor.eof() && cursor.getInteger("id") == location.id) {
+                if (!cursor.eof() && cursor.getInteger(ID) == location.id) {
                     cursor.delete();
                 }
             } while (cursor.next());
             cursor = db.getTable(VIEWS).open();
             List<Integer> viewIds = new ArrayList<Integer>();
             do {
-                if (!cursor.eof() && cursor.getInteger("locid") == location.id) {
-                    Files.deleteIfExists(Paths.get(getImageDirectory(), cursor.getString("image")));
-                    viewIds.add((int) cursor.getInteger("id"));
+                if (!cursor.eof() && cursor.getInteger(LOCID) == location.id) {
+                    Files.deleteIfExists(Paths.get(getImageDirectory(), cursor.getString(IMAGE)));
+                    viewIds.add((int) cursor.getInteger(ID));
                     cursor.delete();
                 }
             } while (cursor.next());
             cursor = db.getTable(LINKS).open();
             do {
                 if (!cursor.eof()) {
-                    int viewId = (int) cursor.getInteger("viewid");
+                    int viewId = (int) cursor.getInteger(VIEWID);
                     for (Integer i : viewIds) {
                         if (i == viewId) {
                             cursor.delete();
@@ -185,8 +380,8 @@ public class DbConnectorImpl implements DbConnector {
             int locid = 0;
             do {
                 if (!cursor.eof()) {
-                    if (cursor.getInteger("id") == viewId) {
-                        locid = (int) cursor.getInteger("locid");
+                    if (cursor.getInteger(ID) == viewId) {
+                        locid = (int) cursor.getInteger(LOCID);
                         cursor.delete();
                     }
                 }
@@ -195,7 +390,7 @@ public class DbConnectorImpl implements DbConnector {
             cursor = db.getTable(VIEWS).open();
             do {
                 if (!cursor.eof()) {
-                    if ((int) cursor.getInteger("locid") == locid) {
+                    if ((int) cursor.getInteger(LOCID) == locid) {
                         locid = 0;
                         break;
                     }
@@ -205,7 +400,7 @@ public class DbConnectorImpl implements DbConnector {
                 cursor = db.getTable(LOCATIONS).open(); // cursor.lookup ???
                 do {
                     if (!cursor.eof()) {
-                        if (cursor.getInteger("id") == locid) {
+                        if (cursor.getInteger(ID) == locid) {
                             cursor.delete();
                             break;
                         }
@@ -215,7 +410,7 @@ public class DbConnectorImpl implements DbConnector {
             cursor = db.getTable(LINKS).open();
             do {
                 if (!cursor.eof()) {
-                    if (cursor.getInteger("viewid") == viewId) {
+                    if (cursor.getInteger(VIEWID) == viewId) {
                         cursor.delete();
                     }
                 }
@@ -226,41 +421,27 @@ public class DbConnectorImpl implements DbConnector {
         }
     }
 
-    // public void setImage(Embedded image, int viewId) {
-    // try {
-    // prepareConnection(false);
-    // ISqlJetCursor cursor = db.getTable(VIEWS).open();
-    // Path path = null;
-    // do {
-    // if (cursor.getInteger("id") == viewId) {
-    // path = Paths.get(getImageDirectory() + "/" + cursor.getString("image"));
-    // break;
-    // }
-    // } while (cursor.next());
-    // closeConnection();
-    // if (path == null) {
-    // image.setSource(new ClassResource("/1.jpg", image.getApplication()));
-    // ClassResource cr;
-    //
-    // } else {
-    // BufferedImage bi = ImageIO.read(path.toFile());
-    // int w = bi.getWidth();
-    // int h = bi.getHeight();
-    // int w1 = 600;
-    // int h1 = (600 * h / w);
-    // image.setWidth(w1 + "px");
-    // image.setHeight(h1 + "px");
-    // }
-    // } catch (Exception e) {
-    // e.printStackTrace();
-    // }
-    // }
+    public void removeLink(LinkModel link) {
+        try {
+            prepareConnection(true);
+            ISqlJetCursor cursor = db.getTable(LINKS).open();
+            do {
+                if (!cursor.eof()) {
+                    if ((int) cursor.getInteger(ID) == link.getId()) {
+                        cursor.delete();
+                    }
+                }
+            } while (cursor.next());
+            closeConnection();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
 
-    private int getMaxId(String tableName, String indexName) throws SqlJetException {
-        ISqlJetTable table = db.getTable(tableName);
-        ISqlJetCursor cursor = table.open().reverse();
+    private int getMaxId(String tableName) throws SqlJetException {
+        ISqlJetCursor cursor = db.getTable(tableName).open().reverse();
         if (!cursor.eof()) {
-            return (int) cursor.getInteger(indexName);
+            return (int) cursor.getInteger(ID);
         } else {
             return 0;
         }
@@ -274,11 +455,14 @@ public class DbConnectorImpl implements DbConnector {
             db.getOptions().setAutovacuum(true);
             db.beginTransaction(SqlJetTransactionMode.WRITE);
             db.getOptions().setUserVersion(1);
-            db.createTable("CREATE TABLE locations (id INTEGER NOT NULL PRIMARY KEY, name TEXT NOT NULL)");
             db.createTable(
-                    "CREATE TABLE views (id INTEGER NOT NULL PRIMARY KEY, locid INTEGER NOT NULL, afterid INTEGER, image TEXT NOT NULL)");
+                    "CREATE TABLE locations (" + ID + " INTEGER NOT NULL PRIMARY KEY, " + NAME + " TEXT NOT NULL)");
             db.createTable(
-                    "CREATE TABLE links (id INTEGER NOT NULL PRIMARY KEY, viewid INTEGER NOT NULL, x REAL, y REAL, viewrefid INTEGER)");
+                    "CREATE TABLE views (" + ID + " INTEGER NOT NULL PRIMARY KEY, " + LOCID + " INTEGER NOT NULL, "
+                            + ORDINAL + " INTEGER, " + IMAGE + " TEXT NOT NULL)");
+            db.createTable(
+                    "CREATE TABLE links (" + ID + " INTEGER NOT NULL PRIMARY KEY, " + VIEWID + " INTEGER NOT NULL, " + X
+                            + " REAL, " + Y + " REAL, " + VIEWREFID + " INTEGER)");
             db.commit();
         }
         db.beginTransaction(write ? SqlJetTransactionMode.WRITE : SqlJetTransactionMode.READ_ONLY);
@@ -304,5 +488,36 @@ public class DbConnectorImpl implements DbConnector {
             }
         }
         return dir;
+    }
+
+    class ImageCompressor extends Thread {
+        private Path imagePath;
+
+        public ImageCompressor(Path imagePath) {
+            this.imagePath = imagePath;
+            start();
+        }
+
+        public void run() {
+            try {
+                BufferedImage bi = ImageIO.read(imagePath.toFile());
+                int scaleX = 600;
+                int scaleY = 600 * bi.getHeight() / bi.getWidth();
+                Image image = bi.getScaledInstance(scaleX, scaleY, Image.SCALE_SMOOTH);
+                BufferedImage bi2;
+                if (image instanceof BufferedImage) {
+                    bi2 = (BufferedImage) image;
+                } else {
+                    bi2 = new BufferedImage(image.getWidth(null), image.getHeight(null), BufferedImage.TYPE_INT_RGB);
+                    Graphics2D bGr = bi2.createGraphics();
+                    bGr.drawImage(image, 0, 0, null);
+                    bGr.dispose();
+                }
+                String ext = imagePath.toString().substring(imagePath.toString().indexOf(".") + 1).toLowerCase();
+                ImageIO.write(bi2, ext, imagePath.toFile());
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
     }
 }

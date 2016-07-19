@@ -6,8 +6,9 @@ import java.util.List;
 import meraschool.views.LocationModelListener;
 
 public class LocationModel {
-    public Location selectedLocation;
-    public List<Location> locations;
+
+    private Location selectedLocation;
+    private List<Location> locations;
     private List<LocationModelListener> listeners = new ArrayList<LocationModelListener>();
 
     public LocationModel() {
@@ -21,6 +22,14 @@ public class LocationModel {
 
     public void addListener(LocationModelListener listener) {
         listeners.add(listener);
+    }
+
+    public Location getSelectedLocation() {
+        return selectedLocation;
+    }
+
+    public List<Location> getLocations() {
+        return locations;
     }
 
     public void selectLocation(Location location) {
@@ -43,5 +52,11 @@ public class LocationModel {
         for (LocationModelListener l : listeners) {
             l.locationListChanged();
         }
+    }
+
+    @Override
+    public String toString() {
+        return "LocationModel [selectedLocation=" + selectedLocation + ", locations=" + locations + ", listeners="
+                + listeners + "]";
     }
 }

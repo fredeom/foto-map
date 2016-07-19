@@ -4,7 +4,6 @@ import java.io.FileOutputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.concurrent.Callable;
 
 import com.vaadin.ui.Button.ClickEvent;
 import com.vaadin.ui.Button.ClickListener;
@@ -17,15 +16,12 @@ import meraschool.App;
 import meraschool.models.Location;
 import meraschool.models.LocationModel;
 import meraschool.models.ViewModel;
-import meraschool.views.LocationModelListener;
+import meraschool.views.ViewModelListener;
 
 public class PreviewController extends ViewController {
 
     public final int viewLevel;
     public final LocationModel locationModel;
-    private Callable<Void> strangeHandler; // needed for left button clicks on
-                                           // images but not on links
-                                           // use of Runnable instead ?
 
     public PreviewController(App app, int viewLevel, ViewModel viewModel) {
         this(app, viewLevel, new LocationModel(), viewModel);
@@ -35,19 +31,14 @@ public class PreviewController extends ViewController {
         super(app, viewModel);
         this.viewLevel = viewLevel;
         this.locationModel = locationModel;
-        locationModel.addListener(new MyLocationModelListener());
-        // load all locations // db call
-        // setSelectedLocationByViewId(viewModel.getViewId()) // db call
-    }
-
-    public void setStrangeHandler(Callable<Void> strangeHandler) {
-        this.strangeHandler = strangeHandler;
+        viewModel.addListener(new MyPreViewModelListener());
     }
 
     @SuppressWarnings("serial")
     class MyReceiver implements Upload.Receiver, SucceededListener {
         private TextField tf;
         private Path img;
+        private String ext;
 
         public MyReceiver(TextField tf) {
             this.tf = tf;
@@ -56,7 +47,7 @@ public class PreviewController extends ViewController {
         public OutputStream receiveUpload(String filename, String mimeType) {
             OutputStream os = null;
             try {
-                String ext = filename.substring(filename.indexOf("."));
+                ext = filename.substring(filename.indexOf("."));
                 String base = filename.substring(0, filename.indexOf("."));
                 img = Files.createTempFile(base, ext);
                 os = new FileOutputStream(img.toFile());
@@ -67,11 +58,7 @@ public class PreviewController extends ViewController {
         }
 
         public void uploadSucceeded(SucceededEvent event) {
-            String newLocationName = (String) tf.getValue();
-            int newViewId = app.dbConnector.addView(new Location(0, newLocationName), img, 0);
-            locationModel.setLocationList(app.dbConnector.getLocationList());
-            locationModel.selectLocation(app.dbConnector.getLocationByViewId(newViewId));
-            viewModel.selectViewId(newViewId);
+            viewModel.selectViewId(app.dbConnector.addView(new Location(0, (String) tf.getValue()), img, 0));
         }
     }
 
@@ -84,10 +71,13 @@ public class PreviewController extends ViewController {
     public ClickListener getRemoveSelectedViewClickListener() {
         return new ClickListener() {
             public void buttonClick(ClickEvent event) {
-                app.dbConnector.removeView(viewModel.viewId);
-                viewModel.selectViewId(app.dbConnector.getFirstViewByLocation(locationModel.selectedLocation));
-                locationModel.setLocationList(app.dbConnector.getLocationList());
-                locationModel.selectLocation(app.dbConnector.getLocationByViewId(viewModel.getViewId()));
+                if (viewModel.getViewId() == 0) {
+                    app.getMainWindow().showNotification("No view selected");
+                    return;
+                } else {
+                    app.dbConnector.removeView(viewModel.getViewId());
+                }
+                viewModel.selectViewId(app.dbConnector.getFirstViewByLocation(locationModel.getSelectedLocation()));
             }
         };
     }
@@ -96,8 +86,12 @@ public class PreviewController extends ViewController {
     public ClickListener getRemoveSelectedLocationClickListener() {
         return new ClickListener() {
             public void buttonClick(ClickEvent event) {
-                app.dbConnector.removeLocation(locationModel.selectedLocation);
-                locationModel.setLocationList(app.dbConnector.getLocationList());
+                if (locationModel.getSelectedLocation() == null) {
+                    app.getMainWindow().showNotification("No location selected");
+                } else {
+                    app.dbConnector.removeLocation(locationModel.getSelectedLocation());
+                }
+                viewModel.selectViewId(0);
             }
         };
     }
@@ -106,18 +100,19 @@ public class PreviewController extends ViewController {
     public ClickListener getLocationButtonClickListener(final Location l) {
         return new ClickListener() {
             public void buttonClick(ClickEvent event) {
-                locationModel.selectLocation(l);
+                viewModel.selectViewId(app.dbConnector.getFirstViewByLocation(l));
             }
         };
     }
 
-    class MyLocationModelListener implements LocationModelListener {
-        public void selectedLocationChanged() {
-            viewModel.selectViewId(app.dbConnector.getFirstViewByLocation(locationModel.selectedLocation));
+    class MyPreViewModelListener implements ViewModelListener {
+        public void viewChanged() {
+            locationModel.setLocationList(app.dbConnector.getLocationList());
+            locationModel.selectLocation(app.dbConnector.getLocationByViewId(viewModel.getViewId()));
         }
 
-        public void locationListChanged() {
-            System.out.println("here comes useless program branch");
+        public void viewClosing() {
+            System.out.println("View panel and Location panel have common window, no need to remove it twice");
         }
     }
 }

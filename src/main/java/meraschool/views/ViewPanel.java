@@ -1,15 +1,17 @@
 package meraschool.views;
 
+import java.awt.Point;
+
 import com.vaadin.event.ShortcutAction.KeyCode;
 import com.vaadin.event.ShortcutListener;
-import com.vaadin.terminal.Paintable.RepaintRequestEvent;
-import com.vaadin.terminal.Paintable.RepaintRequestListener;
 import com.vaadin.ui.Alignment;
 import com.vaadin.ui.Button;
 import com.vaadin.ui.Embedded;
 import com.vaadin.ui.HorizontalLayout;
 import com.vaadin.ui.Panel;
+import com.vaadin.ui.Window;
 
+import meraschool.DbConnectorImpl.Neighbor;
 import meraschool.controllers.ViewController;
 
 @SuppressWarnings("serial")
@@ -44,12 +46,24 @@ public class ViewPanel extends Panel implements ViewModelListener {
     }
 
     public void viewChanged() {
-        image.setSource(c.getImage());
-        // c.app.dbConnector.setImage(image, c.viewModel.getViewId());
-        image.setWidth("600px");
-        image.setHeight("400px");
+        Point p = c.getImageSize();
+        if (p == null) {
+            c.viewModel.selectViewId(c.app.dbConnector.getNeighborViewTo(c.viewModel.getViewId(), Neighbor.RIGHT));
+        } else {
+            image.setSource(c.getImage());
+            String h = Float.toString(600 * p.y / p.x);
+            image.setWidth("600px");
+            image.setHeight(h + "px");
+        }
 
-        // add moar Links with click listeners ?
+        if (getWindow() != null) {
+            getWindow().focus();
+        }
+    }
+
+    public void viewClosing() {
+        Window w = getWindow();
+        ((Window) w.getParent()).removeWindow(w);
     }
 }
 
@@ -63,13 +77,5 @@ class MyDebugListener1 extends ShortcutListener {
     @Override
     public void handleAction(Object sender, Object target) {
         System.out.println("LEFT: " + sender + " | " + target + " | " + getCaption());
-    }
-}
-
-// image.addListener(new MyDebugListener2()); // controller.action2()
-@SuppressWarnings("serial")
-class MyDebugListener2 implements RepaintRequestListener {
-    public void repaintRequested(RepaintRequestEvent event) {
-        System.out.println(event.getSource());
     }
 }

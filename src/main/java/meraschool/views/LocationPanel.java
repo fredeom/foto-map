@@ -21,16 +21,19 @@ public class LocationPanel extends Panel implements LocationModelListener {
         this.c = c;
         c.locationModel.addListener(this);
         locationListChanged();
+        selectedLocationChanged();
         setSizeUndefined();
     }
 
     public void selectedLocationChanged() {
+        Location loc = c.locationModel.getSelectedLocation();
         for (Button b : btnList) {
-            String currentCaption = c.locationModel.selectedLocation.id + ": " + c.locationModel.selectedLocation.name;
-            if (b.getCaption().equals(currentCaption)) {
-                b.setStyleName(BaseTheme.BUTTON_LINK);
-            } else {
-                b.removeStyleName(BaseTheme.BUTTON_LINK);
+            if (loc != null) {
+                if (b.getCaption().equals(loc.toString())) {
+                    b.setStyleName(BaseTheme.BUTTON_LINK);
+                } else {
+                    b.removeStyleName(BaseTheme.BUTTON_LINK);
+                }
             }
         }
     }
@@ -39,8 +42,8 @@ public class LocationPanel extends Panel implements LocationModelListener {
         removeAllComponents();
         VerticalLayout vl = new VerticalLayout();
         btnList.clear();
-        for (Location l : c.locationModel.locations) {
-            Button b = new Button(l.id + ": " + l.name);
+        for (Location l : c.locationModel.getLocations()) {
+            Button b = new Button(l.toString());
             b.addListener(c.getLocationButtonClickListener(l));
             vl.addComponent(b);
             btnList.add(b);

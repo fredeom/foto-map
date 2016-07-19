@@ -52,7 +52,7 @@ class ClickListener1 implements Button.ClickListener {
 
     public void buttonClick(ClickEvent event) {
         app.getMainWindow().addComponent(new Label("new Application().start()"));
-        Window w = new ViewWindow(app, app.getMainWindow());
+        Window w = new ViewWindow(app);
         w.setModal(true);
         app.getMainWindow().addWindow(w);
         w.setCloseShortcut(KeyCode.ESCAPE, null);

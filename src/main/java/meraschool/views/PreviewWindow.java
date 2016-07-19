@@ -10,15 +10,17 @@ import com.vaadin.ui.Upload.Receiver;
 import com.vaadin.ui.Upload.SucceededListener;
 import com.vaadin.ui.VerticalLayout;
 import com.vaadin.ui.Window;
+import com.vaadin.ui.Window.CloseEvent;
+import com.vaadin.ui.Window.CloseListener;
 
 import meraschool.controllers.PreviewController;
+import meraschool.controllers.ViewController;
 
 @SuppressWarnings("serial")
 public class PreviewWindow extends Window {
 
-    public PreviewWindow(PreviewController c, Window parent) {
+    public PreviewWindow(PreviewController c) {
         super("Down the Rabbit Hole: " + c.viewLevel);
-        c.setWindow(this);
         LocationPanel locationPanel = new LocationPanel(c);
         ViewPanel viewPanel = new ViewPanel(c);
 
@@ -54,6 +56,19 @@ public class PreviewWindow extends Window {
 
         setContent(hl);
         setSizeUndefined();
-        addListener(new CloseListener1(parent));
+        addListener(new CloseListener1(c));
+    }
+}
+
+@SuppressWarnings("serial")
+class CloseListener1 implements CloseListener {
+    private ViewController c;
+
+    public CloseListener1(ViewController c) {
+        this.c = c;
+    }
+
+    public void windowClose(CloseEvent e) {
+        c.viewModel.parentViewModel.fireViewChanged();
     }
 }
