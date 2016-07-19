@@ -47,8 +47,8 @@ public class PreviewController extends ViewController {
         public OutputStream receiveUpload(String filename, String mimeType) {
             OutputStream os = null;
             try {
-                ext = filename.substring(filename.indexOf("."));
-                String base = filename.substring(0, filename.indexOf("."));
+                ext = filename.substring(filename.lastIndexOf("."));
+                String base = filename.substring(0, filename.lastIndexOf("."));
                 img = Files.createTempFile(base, ext);
                 os = new FileOutputStream(img.toFile());
             } catch (Exception e) {

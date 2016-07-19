@@ -69,7 +69,7 @@ public class DbConnectorImpl implements DbConnector {
             int viewId = getMaxId(VIEWS) + 1;
 
             String ext = image.getFileName().toString();
-            ext = ext.substring(ext.indexOf("."));
+            ext = ext.substring(ext.lastIndexOf("."));
             String imageName = String.valueOf(viewId) + ext;
             final Path imagePath = Paths.get(getImageDirectory(), imageName);
             Files.move(image, imagePath, StandardCopyOption.REPLACE_EXISTING);
@@ -513,7 +513,7 @@ public class DbConnectorImpl implements DbConnector {
                     bGr.drawImage(image, 0, 0, null);
                     bGr.dispose();
                 }
-                String ext = imagePath.toString().substring(imagePath.toString().indexOf(".") + 1).toLowerCase();
+                String ext = imagePath.toString().substring(imagePath.toString().lastIndexOf(".") + 1).toLowerCase();
                 ImageIO.write(bi2, ext, imagePath.toFile());
             } catch (IOException e) {
                 e.printStackTrace();
