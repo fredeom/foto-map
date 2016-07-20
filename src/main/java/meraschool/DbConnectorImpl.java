@@ -60,6 +60,9 @@ public class DbConnectorImpl implements DbConnector {
                     }
                 } while (vc.next());
             } else {
+                if (location == null) {
+                    location = new Location(0, "New Location");
+                }
                 if (location.id == 0) {
                     location.id = getMaxId(LOCATIONS) + 1;
                     db.getTable(LOCATIONS).insert(location.id, location.name);
@@ -208,6 +211,34 @@ public class DbConnectorImpl implements DbConnector {
     }
 
     class ViewNode {
+        @Override
+        public int hashCode() {
+            final int prime = 31;
+            int result = 1;
+            result = prime * result + getOuterType().hashCode();
+            result = prime * result + ordinal;
+            result = prime * result + viewId;
+            return result;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj)
+                return true;
+            if (obj == null)
+                return false;
+            if (getClass() != obj.getClass())
+                return false;
+            ViewNode other = (ViewNode) obj;
+            if (!getOuterType().equals(other.getOuterType()))
+                return false;
+            if (ordinal != other.ordinal)
+                return false;
+            if (viewId != other.viewId)
+                return false;
+            return true;
+        }
+
         public int viewId;
         public int ordinal;
 
@@ -215,9 +246,29 @@ public class DbConnectorImpl implements DbConnector {
             this.viewId = viewId;
             this.ordinal = ordinal;
         }
+
+        @Override
+        public String toString() {
+            return "ViewNode [viewId=" + viewId + ", ordinal=" + ordinal + "]";
+        }
+
+        private DbConnectorImpl getOuterType() {
+            return DbConnectorImpl.this;
+        }
+
+        public Comparator<? super ViewNode> Comparator() {
+            return new Comparator<ViewNode>() {
+                public int compare(ViewNode vn1, ViewNode vn2) {
+                    return vn1.ordinal > vn2.ordinal ? 1 : -1;
+                }
+            };
+        }
     }
 
     public int getNeighborViewTo(int viewId, Neighbor n) {
+        if (viewId == 0) {
+            return 0;
+        }
         try {
             prepareConnection(false);
 
@@ -246,15 +297,11 @@ public class DbConnectorImpl implements DbConnector {
                 }
             } while (cursor.next());
 
-            Collections.sort(vnl, new Comparator<ViewNode>() {
-                public int compare(ViewNode vn1, ViewNode vn2) {
-                    return vn1.ordinal > vn2.ordinal ? 1 : 0;
-                }
-            });
+            Collections.sort(vnl, new ViewNode(0, 0).Comparator());
 
             int i;
             for (i = 0; i < vnl.size(); ++i) {
-                if (vnl.get(i) == vn) {
+                if (vnl.get(i).equals(vn)) {
                     break;
                 }
             }
@@ -353,8 +400,10 @@ public class DbConnectorImpl implements DbConnector {
                     Files.deleteIfExists(Paths.get(getImageDirectory(), cursor.getString(IMAGE)));
                     viewIds.add((int) cursor.getInteger(ID));
                     cursor.delete();
+                } else {
+                    cursor.next();
                 }
-            } while (cursor.next());
+            } while (!cursor.eof());
             cursor = db.getTable(LINKS).open();
             do {
                 if (!cursor.eof()) {
@@ -362,11 +411,15 @@ public class DbConnectorImpl implements DbConnector {
                     for (Integer i : viewIds) {
                         if (i == viewId) {
                             cursor.delete();
+                            viewId = 0;
                             break;
                         }
                     }
+                    if (viewId > 0) {
+                        cursor.next();
+                    }
                 }
-            } while (cursor.next());
+            } while (!cursor.eof());
             closeConnection();
         } catch (Exception e) {
             e.printStackTrace();
@@ -388,15 +441,15 @@ public class DbConnectorImpl implements DbConnector {
             } while (cursor.next());
 
             cursor = db.getTable(VIEWS).open();
+            List<ViewNode> vnl = new ArrayList<ViewNode>();
             do {
                 if (!cursor.eof()) {
                     if ((int) cursor.getInteger(LOCID) == locid) {
-                        locid = 0;
-                        break;
+                        vnl.add(new ViewNode((int) cursor.getInteger(ID), (int) cursor.getInteger(ORDINAL)));
                     }
                 }
             } while (cursor.next());
-            if (locid > 0) {
+            if (vnl.size() == 0) {
                 cursor = db.getTable(LOCATIONS).open(); // cursor.lookup ???
                 do {
                     if (!cursor.eof()) {
@@ -406,6 +459,20 @@ public class DbConnectorImpl implements DbConnector {
                         }
                     }
                 } while (cursor.next());
+            } else {
+                Collections.sort(vnl, new ViewNode(0, 0).Comparator());
+                ISqlJetCursor c = db.getTable(VIEWS).open();
+                do {
+                    if (!c.eof()) {
+                        int id = (int) c.getInteger(ID);
+                        for (int i = 0; i < vnl.size(); ++i) {
+                            if (id == vnl.get(i).viewId) {
+                                c.update(c.getInteger(ID), c.getInteger(LOCID), i + 1, c.getString(IMAGE));
+                                break;
+                            }
+                        }
+                    }
+                } while (c.next());
             }
             cursor = db.getTable(LINKS).open();
             do {
